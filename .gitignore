@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+examples/input/*.nii.gz
+examples/output/*
+!examples/output/.gitkeep
+models/**/*.pth

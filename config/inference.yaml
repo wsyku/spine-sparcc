@@ -1,0 +1,28 @@
+device: auto
+
+segmentation:
+  model_dir: segmentation
+  folds: [0, 1, 2, 3, 4]
+  weight_pattern: fold_{fold}.pth
+  tile_step_size: 0.5
+  use_gaussian: true
+  use_mirroring: true
+  num_processes_preprocessing: 2
+  num_processes_export: 2
+  foreground_channel: 1
+  npz_key: probabilities
+
+preprocessing:
+  hw_size: [320, 320]
+  max_slices: 16
+
+classification:
+  checkpoint: classification/model.pth
+  slice_threshold: 0.5
+  segment_threshold: 0.6978082060813904
+  segment_aggregation: adjacent_feature_mean_then_pair_logit_softmax_temperature_0.5
+
+regression:
+  checkpoint: regression/model.pth
+  score_min: 0.0
+  score_max: 108.0

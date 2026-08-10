@@ -1,0 +1,10 @@
+# Reference environment: Python 3.12.13, CUDA 13.2.
+# Install the correct CUDA/CPU PyTorch build for your platform.
+torch==2.12.1
+torchvision==0.27.1
+nnunetv2==2.8.0
+dynamic-network-architectures==0.4.4
+nibabel==5.4.2
+numpy==2.4.6
+pandas==3.0.3
+PyYAML==6.0.3
