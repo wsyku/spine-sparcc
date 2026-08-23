@@ -93,11 +93,6 @@ class SegmentClassificationHead(nn.Module):
         return {
             "cls_logit": segment_logit,
             "prob_bme": torch.sigmoid(segment_logit),
-            "pair_logits": pair_logits,
-            "pair_probabilities": torch.sigmoid(pair_logits).masked_fill(~pair_mask, 0.0),
-            "pair_mask": pair_mask,
-            "pair_valid_sample": valid_sample,
-            "aggregation_weights": pair_weights,
         }
 
 
@@ -134,9 +129,6 @@ class BMEClassifierNetwork(nn.Module):
             **segment,
             "slice_logits": slice_logits,
             "slice_probabilities": torch.sigmoid(slice_logits),
-            "segment_head_enabled": True,
-            "reg_score": segment["cls_logit"] * 0.0,
-            "final_score": segment["cls_logit"] * 0.0,
         }
 
 
@@ -199,16 +191,8 @@ class SPARCCRegressorNetwork(nn.Module):
         pooled = torch.sum(features * attention_weights.unsqueeze(-1), dim=1)
         shared = self.shared(pooled)
         score = F.softplus(self.base_head(shared).squeeze(-1))
-        zeros = score * 0.0
         return {
-            "cls_logit": None,
-            "prob_bme": torch.ones_like(score),
-            "base_score": score,
-            "correction": zeros,
-            "reg_score": score,
-            "final_score": score,
-            "ordinal_logits": None,
-            "ordinal_probabilities": None,
+            "sparcc_score": score,
             "attention_weights": attention_weights,
         }
 

@@ -320,7 +320,7 @@ def main() -> None:
 
         segment_probability = float(class_output["prob_bme"][0].detach().cpu())
         segment_threshold = float(config["classification"]["segment_threshold"])
-        sparcc_score_raw = float(regression_output["reg_score"][0].detach().cpu())
+        sparcc_score_raw = float(regression_output["sparcc_score"][0].detach().cpu())
         sparcc_score_raw = min(
             max(sparcc_score_raw, float(config["regression"]["score_min"])),
             float(config["regression"]["score_max"]),
