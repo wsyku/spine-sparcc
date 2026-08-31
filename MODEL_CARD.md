@@ -73,8 +73,9 @@ exported.
 
 ## Data and privacy
 
-Patient images are not distributed with the repository. Users must provide
-locally authorized inputs that comply with their ethics, consent, privacy, and
+The repository includes one anonymized lumbar-segment example with a generic
+identifier and cleared descriptive NIfTI header fields. Users must ensure that
+any additional inputs comply with their ethics, consent, privacy, and
 data-governance requirements.
 
 ## License

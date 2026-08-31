@@ -5,8 +5,9 @@ fat-suppressed spine MRI. It performs BME segmentation with a five-fold
 nnU-Net ensemble, slice- and segment-level BME classification, segment-level
 SPARCC score regression, and patient-level aggregation.
 
-Patient images, training data, dataset splits, optimizer states, training
-logs, and historical experiments are not distributed.
+The repository includes one anonymized lumbar-segment example. Training data,
+dataset splits, optimizer states, training logs, and historical experiments
+are not distributed.
 
 > This software is for research use only. It is not a medical device and must
 > not be used as the sole basis for diagnosis or treatment decisions.
@@ -70,8 +71,9 @@ checksum verification command are documented in `models/README.md`.
 
 ## Run inference
 
-The repository does not include patient images. After adding locally
-authorized images to `examples/input`, run from the repository root:
+The included lumbar example can be run directly. Additional locally authorized
+images may be added to `examples/input` using the naming convention above.
+Run from the repository root:
 
 ```powershell
 python tools/verify_release.py
