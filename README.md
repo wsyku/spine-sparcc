@@ -26,7 +26,6 @@ SpineSPARCC/
 │   └── segmentation/
 ├── src/
 ├── tools/
-├── MODEL_CARD.md
 └── requirements.txt
 ```
 
@@ -100,6 +99,42 @@ validation set and fixed before external testing. A classifier-negative
 segment receives a final SPARCC score of zero; `sparcc_score_raw` is retained
 for transparent downstream analysis.
 
+## Model details
+
+The segmentation stage uses a five-fold nnU-Net ensemble to generate a BME
+mask and foreground probability map. The downstream models use the MRI
+multiplied elementwise by that probability map.
+
+### BME classifier
+
+- Input: 16 central sagittal slices resized to 320 x 320.
+- Backbone: randomly initialized 2D ResNet18.
+- Slice branch: a shared linear head over 512-dimensional slice features.
+- Segment branch: adjacent slice features are averaged, normalized with
+  `LayerNorm(512)`, concatenated with a learned 16-dimensional C/T/L embedding,
+  and passed through a shared `528 -> 128 -> 1` pair head.
+- Pooling: softmax-weighted sum of valid pair logits with temperature 0.5.
+- Checkpoint: fold 0 selected by minimum combined validation loss.
+
+### SPARCC regressor
+
+- Input and spatial preprocessing are identical to the classifier.
+- Backbone: randomly initialized 2D ResNet34.
+- A learned 512-dimensional C/T/L embedding is added to each slice feature,
+  followed by `LayerNorm(512)` and dropout 0.1.
+- Attention pooling: `512 -> 128 -> 1` with Tanh and softmax over valid slices.
+- Regression head: `128 -> 256 -> 128 -> 64 -> 1` with GELU, LayerNorm, and
+  dropout 0.3.
+- Softplus produces a non-negative raw score; released inference clips it to
+  the valid 0-108 range.
+- Checkpoint: fold 0 selected by maximum validation ICC(2,1) among
+  reference-positive segments.
+
+Only segmentation uses five-fold ensembling. Classification and regression
+each use one selected fold-0 checkpoint. The final segment score is the bounded
+raw regression score when the segment classifier is positive and zero
+otherwise; both raw and gated scores are exported.
+
 ## Reusing segmentation outputs
 
 Retain nnU-Net probability arrays during the first run:
@@ -129,10 +164,28 @@ Small floating-point differences can occur across GPU models, CUDA versions,
 and PyTorch builds. Classification decisions should be compared using the
 released thresholds; continuous outputs should use a numerical tolerance.
 
+## Intended use and limitations
+
+SpineSPARCC is intended for reproduction of the accompanying research
+pipeline, methodological research, and non-clinical benchmarking on
+appropriately governed MRI data. It has not been validated as a clinical
+diagnostic device and does not replace expert image interpretation.
+
+Performance may change with scanner, acquisition protocol, field strength,
+anatomy coverage, orientation, intensity distribution, and disease prevalence.
+Outputs require independent clinical and statistical validation before use in
+a new cohort.
+
+The repository includes one anonymized lumbar-segment example with a generic
+identifier and cleared descriptive NIfTI header fields. Users are responsible
+for ensuring that additional inputs comply with applicable ethics, consent,
+privacy, and data-governance requirements.
+
 ## Citation and license
 
 See `CITATION.cff` for citation metadata and `LICENSE` for the code license.
-Model weights are distributed under the terms stated in `MODEL_CARD.md`.
+Model weights are distributed under the terms supplied with the corresponding
+GitHub Release. No clinical-use rights are granted.
 
 ### Third-party components
 
