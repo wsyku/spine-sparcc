@@ -1,37 +1,55 @@
 # SpineSPARCC
 
-**SpineSPARCC** is an inference-only research pipeline for sagittal
-fat-suppressed spine MRI. It performs BME segmentation with a five-fold
-nnU-Net ensemble, slice- and segment-level BME classification, segment-level
-SPARCC score regression, and patient-level aggregation.
+SpineSPARCC estimates spinal bone marrow edema (BME) and SPARCC scores from
+sagittal fat-suppressed MRI. The inference pipeline contains three separately
+trained models:
 
-The repository includes one anonymized lumbar-segment example. Training data,
-dataset splits, optimizer states, training logs, and historical experiments
-are not distributed.
+1. a five-fold nnU-Net ensemble for BME segmentation;
+2. a ResNet18 classifier for slice- and segment-level BME prediction;
+3. a ResNet34 regressor for segment-level SPARCC scoring.
 
-> This software is for research use only. It is not a medical device and must
-> not be used as the sole basis for diagnosis or treatment decisions.
+The nnU-Net foreground probability map is multiplied by the MR image before it
+is passed to the classifier and regressor. If the classifier marks a segment as
+BME-negative, its final SPARCC score is set to zero. Raw regression scores are
+also saved.
 
-## Repository layout
+This repository contains inference code and one anonymized lumbar example. It
+does not include training data, data splits, optimizer states, training logs,
+or experimental code. The software is intended for research use and is not a
+medical device.
 
-```text
-SpineSPARCC/
-├── config/inference.yaml
-├── examples/
-│   ├── input/
-│   └── output/
-├── models/
-│   ├── classification/
-│   ├── regression/
-│   └── segmentation/
-├── src/
-├── tools/
-└── requirements.txt
+## Installation
+
+The reference environment used for release testing was Python 3.12.13,
+PyTorch 2.12.1, torchvision 0.27.1, CUDA 13.2, nnU-Net 2.8.0, Windows 11, and
+an NVIDIA RTX 5090 GPU.
+
+```powershell
+git clone https://github.com/wsyku/spine-sparcc.git
+cd spine-sparcc
+python -m pip install -r requirements.txt
+```
+
+Install the PyTorch build appropriate for your CUDA version if it differs from
+the reference environment. CPU inference is supported but is considerably
+slower.
+
+## Model weights
+
+Download `spine-sparcc-models-v0.1.0.zip` from the GitHub Release and extract
+it into `models/`. The expected directory structure is described in
+[`models/README.md`](models/README.md).
+
+The files can be checked after extraction with:
+
+```powershell
+python tools/verify_release.py
 ```
 
 ## Input
 
-Place NIfTI images in one directory using these names:
+Input images must be NIfTI files. The filename identifies the patient and
+spinal region:
 
 ```text
 <patient_id>_C_0000.nii.gz
@@ -39,46 +57,18 @@ Place NIfTI images in one directory using these names:
 <patient_id>_L_0000.nii.gz
 ```
 
-`C`, `T`, and `L` denote cervical, thoracic, and lumbar segments. A patient
-may have one, two, or all three segment files.
+`C`, `T`, and `L` refer to the cervical, thoracic, and lumbar spine. It is not
+necessary to provide all three regions for every patient.
 
-## Installation
+## Inference
 
-The verified reference environment is Python 3.12.13, PyTorch 2.12.1,
-torchvision 0.27.1, CUDA 13.2, nnU-Net v2.8.0, Windows 11, and an NVIDIA RTX
-5090 GPU.
-
-Clone the repository and install its pinned dependencies:
+Run the included example from the repository root:
 
 ```powershell
-git clone <repository-url>
-cd spine-sparcc
-python -m pip install -r requirements.txt
-```
-
-This repository is not installed as a Python package. For a GPU installation,
-install the PyTorch build appropriate for the local CUDA setup if it differs
-from the reference environment. CPU inference is supported but substantially
-slower.
-
-## Model weights
-
-Download `spine-sparcc-models-v0.1.0.zip` from the project's GitHub Release and
-extract its contents directly into `models/`. The resulting layout and
-checksum verification command are documented in `models/README.md`.
-
-## Run inference
-
-The included lumbar example can be run directly. Additional locally authorized
-images may be added to `examples/input` using the naming convention above.
-Run from the repository root:
-
-```powershell
-python tools/verify_release.py
 python src/run_inference.py --input examples/input --output examples/output
 ```
 
-The inference command produces:
+The output directory contains:
 
 ```text
 examples/output/
@@ -88,121 +78,73 @@ examples/output/
 └── patient_summary.csv
 ```
 
-`slice_classification.csv` contains original/model slice indices, raw slice
-probabilities, and thresholded slice labels. `segment_results.csv` contains
-raw segment probabilities, thresholded segment labels, raw regression scores,
-and classification-gated SPARCC scores. Regression scores are bounded to the
-valid 0-108 range.
+- `segmentation/` contains the BME masks.
+- `slice_classification.csv` contains slice probabilities and labels.
+- `segment_results.csv` contains segment probabilities, raw regression scores,
+  and classification-gated SPARCC scores.
+- `patient_summary.csv` contains the summed SPARCC score for each patient.
 
-The segment threshold is 0.6978082060813904, selected on the internal
-validation set and fixed before external testing. A classifier-negative
-segment receives a final SPARCC score of zero; `sparcc_score_raw` is retained
-for transparent downstream analysis.
+The segment threshold is `0.6978082060813904`. It was selected on the
+validation set and is not recalculated during inference. Regression scores are
+limited to the valid SPARCC range of 0–108.
 
-## Model details
+## Model and preprocessing details
 
-The segmentation stage uses a five-fold nnU-Net ensemble to generate a BME
-mask and foreground probability map. The downstream models use the MRI
-multiplied elementwise by that probability map.
+Volumes are centrally cropped to 16 slices or padded at the end when fewer
+slices are available. Padded slices and invalid adjacent-slice pairs are
+excluded. MR images and probability maps are resized to 320 × 320 using
+bilinear interpolation. MR intensities greater than zero are normalized by
+their foreground mean and standard deviation.
 
-### BME classifier
+The classifier uses a 2D ResNet18. Its slice head operates on individual
+512-dimensional features. For segment prediction, adjacent slice features are
+averaged and normalized, then concatenated with a learned 16-dimensional
+cervical/thoracic/lumbar embedding. A shared pair head produces logits that are
+combined by softmax pooling with temperature 0.5. The released checkpoint was
+selected by the lowest combined validation loss.
 
-- Input: 16 central sagittal slices resized to 320 x 320.
-- Backbone: randomly initialized 2D ResNet18.
-- Slice branch: a shared linear head over 512-dimensional slice features.
-- Segment branch: adjacent slice features are averaged, normalized with
-  `LayerNorm(512)`, concatenated with a learned 16-dimensional C/T/L embedding,
-  and passed through a shared `528 -> 128 -> 1` pair head.
-- Pooling: softmax-weighted sum of valid pair logits with temperature 0.5.
-- Checkpoint: fold 0 selected by minimum combined validation loss.
+The regressor uses a 2D ResNet34. A learned 512-dimensional region embedding is
+added to each slice feature before LayerNorm and attention pooling. The pooled
+feature is mapped to a non-negative score and clipped to 0–108. The released
+checkpoint was selected by the highest validation ICC(2,1) among
+reference-positive segments.
 
-### SPARCC regressor
+Only the segmentation stage uses five-fold ensembling. The released classifier
+and regressor each use one fold-0 checkpoint.
 
-- Input and spatial preprocessing are identical to the classifier.
-- Backbone: randomly initialized 2D ResNet34.
-- A learned 512-dimensional C/T/L embedding is added to each slice feature,
-  followed by `LayerNorm(512)` and dropout 0.1.
-- Attention pooling: `512 -> 128 -> 1` with Tanh and softmax over valid slices.
-- Regression head: `128 -> 256 -> 128 -> 64 -> 1` with GELU, LayerNorm, and
-  dropout 0.3.
-- Softplus produces a non-negative raw score; released inference clips it to
-  the valid 0-108 range.
-- Checkpoint: fold 0 selected by maximum validation ICC(2,1) among
-  reference-positive segments.
+Inference uses seed 42 with deterministic cuDNN settings. Small numerical
+differences may still occur between PyTorch, CUDA, and GPU versions.
 
-Only segmentation uses five-fold ensembling. Classification and regression
-each use one selected fold-0 checkpoint. The final segment score is the bounded
-raw regression score when the segment classifier is positive and zero
-otherwise; both raw and gated scores are exported.
+## Limitations and data use
 
-## Reusing segmentation outputs
+Performance can vary with scanner, acquisition protocol, field strength,
+anatomical coverage, orientation, and disease prevalence. Results should be
+validated independently before the model is applied to a new cohort.
 
-Retain nnU-Net probability arrays during the first run:
+The example image has a generic filename and cleared descriptive NIfTI header
+fields. It is provided only to demonstrate inference and is not covered by the
+Apache-2.0 code license. See
+[`examples/DATA_NOTICE.md`](examples/DATA_NOTICE.md). Users are responsible for
+the governance and authorization of any additional images.
 
-```powershell
-python src/run_inference.py --input examples/input --output examples/output --save-probabilities
-```
+## Citation and licenses
 
-After the masks and probability arrays exist, reuse them with:
+Citation information is provided in [`CITATION.cff`](CITATION.cff). Source code
+is released under the [Apache License 2.0](LICENSE). Terms for model weights are
+provided with the GitHub Release.
 
-```powershell
-python src/run_inference.py --input examples/input --output examples/output --skip-segmentation --save-probabilities
-```
+SpineSPARCC uses the following third-party projects under their respective
+licenses:
 
-## Reproducibility notes
-
-- Inference seed: 42.
-- cuDNN benchmarking is disabled and deterministic mode is enabled.
-- Volumes use the central 16 slices; shorter volumes are padded at the end.
-- Padded slices and invalid adjacent pairs are excluded.
-- MRI and probability maps are resized to 320 × 320 with bilinear interpolation.
-- MRI foreground voxels (`intensity > 0`) are z-score normalized.
-- Only segmentation is a five-fold ensemble. Classification and regression
-  each use one selected fold-0 checkpoint.
-
-Small floating-point differences can occur across GPU models, CUDA versions,
-and PyTorch builds. Classification decisions should be compared using the
-released thresholds; continuous outputs should use a numerical tolerance.
-
-## Intended use and limitations
-
-SpineSPARCC is intended for reproduction of the accompanying research
-pipeline, methodological research, and non-clinical benchmarking on
-appropriately governed MRI data. It has not been validated as a clinical
-diagnostic device and does not replace expert image interpretation.
-
-Performance may change with scanner, acquisition protocol, field strength,
-anatomy coverage, orientation, intensity distribution, and disease prevalence.
-Outputs require independent clinical and statistical validation before use in
-a new cohort.
-
-The repository includes one anonymized lumbar-segment example with a generic
-identifier and cleared descriptive NIfTI header fields. Users are responsible
-for ensuring that additional inputs comply with applicable ethics, consent,
-privacy, and data-governance requirements.
-
-## Citation and license
-
-See `CITATION.cff` for citation metadata and `LICENSE` for the code license.
-Model weights are distributed under the terms supplied with the corresponding
-GitHub Release. No clinical-use rights are granted.
-
-### Third-party components
-
-SpineSPARCC depends on and/or adapts components from the projects below. Their
-respective licenses continue to apply.
-
-- **nnU-Net v2** — [project](https://github.com/MIC-DKFZ/nnUNet), Apache
-  License 2.0. See Isensee F, Jaeger PF, Kohl SAA, Petersen J, Maier-Hein KH.
-  *nnU-Net: a self-configuring method for deep learning-based biomedical image
+- [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet), Apache License 2.0. See:
+  Isensee F, Jaeger PF, Kohl SAA, Petersen J, Maier-Hein KH. *nnU-Net: a
+  self-configuring method for deep learning-based biomedical image
   segmentation.* Nature Methods. 2021;18:203–211.
-- **dynamic-network-architectures** —
-  [project](https://github.com/MIC-DKFZ/dynamic-network-architectures), Apache
-  License 2.0.
-- **PyTorch** and **torchvision** —
-  [PyTorch](https://github.com/pytorch/pytorch) and
-  [torchvision](https://github.com/pytorch/vision), under the BSD-style
-  licenses supplied by their respective projects.
-- **Other Python dependencies** — NumPy, pandas, NiBabel, and PyYAML remain
-  subject to their own licenses. Released version pins are listed in
-  `requirements.txt`.
+- [dynamic-network-architectures](https://github.com/MIC-DKFZ/dynamic-network-architectures),
+  Apache License 2.0.
+- [PyTorch](https://github.com/pytorch/pytorch) and
+  [torchvision](https://github.com/pytorch/vision), under their distributed
+  BSD-style licenses.
+
+Other dependencies are listed in [`requirements.txt`](requirements.txt) and
+remain subject to their own licenses.
