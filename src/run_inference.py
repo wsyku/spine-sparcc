@@ -84,10 +84,6 @@ def discover_cases(input_dir: Path) -> list[dict]:
     return cases
 
 
-def load_prediction_model(checkpoint_path: Path, task: str, device: torch.device):
-    return load_model(checkpoint_path, task, device)
-
-
 @contextmanager
 def prepare_nnunet_model_layout(segmentation: dict):
     """Adapt flat public checkpoints to nnU-Net's fold-directory layout."""
@@ -174,11 +170,10 @@ def run_segmentation(
 def predict_models(classifier, regressor, prepared: dict, segment_id: int, device: torch.device):
     raw = prepared["raw_image"].unsqueeze(0).to(device)
     probability = prepared["probability"].unsqueeze(0).to(device)
-    mask = prepared["mask"].unsqueeze(0).to(device)
     slice_mask = prepared["slice_mask"].unsqueeze(0).to(device)
     segment = torch.tensor([segment_id], dtype=torch.long, device=device)
-    classification = classifier(raw, probability, mask, segment, slice_mask)
-    regression = regressor(raw, probability, mask, segment, slice_mask)
+    classification = classifier(raw, probability, segment, slice_mask)
+    regression = regressor(raw, probability, segment, slice_mask)
     return classification, regression
 
 
@@ -267,12 +262,12 @@ def main() -> None:
         case["mask_path"] = mask_path
         case["probability_path"] = probability_path
 
-    classifier = load_prediction_model(
+    classifier = load_model(
         resolve_model_path(config["classification"]["checkpoint"]),
         "classifier",
         device,
     )
-    regressor = load_prediction_model(
+    regressor = load_model(
         resolve_model_path(config["regression"]["checkpoint"]),
         "regressor",
         device,
@@ -286,6 +281,8 @@ def main() -> None:
             case["probability_path"],
             size=config["preprocessing"]["hw_size"],
             depth=int(config["preprocessing"]["max_slices"]),
+            probability_key=str(config["segmentation"]["npz_key"]),
+            foreground_channel=int(config["segmentation"]["foreground_channel"]),
         )
         class_output, regression_output = predict_models(
             classifier,

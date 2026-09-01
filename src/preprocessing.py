@@ -76,9 +76,15 @@ def prepare_case(
     probability_path: str | Path,
     size: Sequence[int] = (320, 320),
     depth: int = 16,
+    probability_key: str = "probabilities",
+    foreground_channel: int = 1,
 ) -> dict[str, torch.Tensor | int]:
     raw_np = load_raw(raw_path)
-    probability_np = load_probability(probability_path)
+    probability_np = load_probability(
+        probability_path,
+        key=probability_key,
+        channel=foreground_channel,
+    )
     if raw_np.shape != probability_np.shape:
         raise ValueError(f"Raw/probability shape mismatch: {raw_np.shape} vs {probability_np.shape}")
     raw = foreground_zscore(resize_hw(raw_np, size, "bilinear"))
@@ -88,7 +94,6 @@ def prepare_case(
     return {
         "raw_image": raw.unsqueeze(0),
         "probability": probability.unsqueeze(0),
-        "mask": (probability >= 0.5).float().unsqueeze(0),
         "slice_mask": valid,
         "original_slice_indices": indices,
         "crop_start": crop_start,

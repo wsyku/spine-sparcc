@@ -20,7 +20,6 @@ classification:
   checkpoint: classification/model.pth
   slice_threshold: 0.5
   segment_threshold: 0.6978082060813904
-  segment_aggregation: adjacent_feature_mean_then_pair_logit_softmax_temperature_0.5
 
 regression:
   checkpoint: regression/model.pth

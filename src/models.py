@@ -56,7 +56,7 @@ def _mlp(
 
 
 class SegmentClassificationHead(nn.Module):
-    """E02: adjacent mean -> LN -> concatenate segment embedding -> pair MLP."""
+    """Classify a segment from adjacent slice pairs and a region embedding."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -144,7 +144,6 @@ class BMEClassifier(nn.Module):
         self,
         raw_image: torch.Tensor,
         probability: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
         segment_id: Optional[torch.Tensor] = None,
         slice_mask: Optional[torch.Tensor] = None,
     ) -> dict[str, torch.Tensor]:
@@ -166,7 +165,6 @@ class SPARCCRegressorNetwork(nn.Module):
         )
         self.segment_embedding = nn.Embedding(3, 512)
         self.base_head = _mlp(128, (256, 128, 64), 0.3, "gelu", True)
-        self.cls_head = None
 
     def forward(
         self,
@@ -201,13 +199,11 @@ class SPARCCRegressor(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.model = SPARCCRegressorNetwork()
-        self.classification_head = self.model.cls_head
 
     def forward(
         self,
         raw_image: torch.Tensor,
         probability: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
         segment_id: Optional[torch.Tensor] = None,
         slice_mask: Optional[torch.Tensor] = None,
     ) -> dict[str, torch.Tensor]:
