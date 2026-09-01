@@ -27,7 +27,6 @@ SpineSPARCC/
 ├── src/
 ├── tools/
 ├── MODEL_CARD.md
-├── THIRD_PARTY_NOTICES.md
 └── requirements.txt
 ```
 
@@ -132,6 +131,25 @@ released thresholds; continuous outputs should use a numerical tolerance.
 
 ## Citation and license
 
-See `CITATION.cff` for citation metadata, `LICENSE` for the code license, and
-`THIRD_PARTY_NOTICES.md` for third-party components. Model weights are
-distributed under the terms stated in `MODEL_CARD.md`.
+See `CITATION.cff` for citation metadata and `LICENSE` for the code license.
+Model weights are distributed under the terms stated in `MODEL_CARD.md`.
+
+### Third-party components
+
+SpineSPARCC depends on and/or adapts components from the projects below. Their
+respective licenses continue to apply.
+
+- **nnU-Net v2** — [project](https://github.com/MIC-DKFZ/nnUNet), Apache
+  License 2.0. See Isensee F, Jaeger PF, Kohl SAA, Petersen J, Maier-Hein KH.
+  *nnU-Net: a self-configuring method for deep learning-based biomedical image
+  segmentation.* Nature Methods. 2021;18:203–211.
+- **dynamic-network-architectures** —
+  [project](https://github.com/MIC-DKFZ/dynamic-network-architectures), Apache
+  License 2.0.
+- **PyTorch** and **torchvision** —
+  [PyTorch](https://github.com/pytorch/pytorch) and
+  [torchvision](https://github.com/pytorch/vision), under the BSD-style
+  licenses supplied by their respective projects.
+- **Other Python dependencies** — NumPy, pandas, NiBabel, and PyYAML remain
+  subject to their own licenses. Released version pins are listed in
+  `requirements.txt`.
